@@ -8,13 +8,8 @@ import {
 	setUser,
 } from "../slices/user-slice";
 
-// export const baseServerUrl = getEnv(
-// 	"VITE_API_BASE_URL",
-// 	"https://ads-backend-4ho2.onrender.com"
-// );
 
-// export const baseServerUrl = "https://ads-backend-4ho2.onrender.com"
-export const baseServerUrl =  "https://mososoup-api.onrender.com";
+export const baseServerUrl =  "https://backend.musosoupcurator.com"
 
 // export const baseServerUrl = "http://127.0.0.1:8000"; // Changed for local testing
 
