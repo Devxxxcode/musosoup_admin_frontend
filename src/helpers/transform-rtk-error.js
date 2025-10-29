@@ -27,29 +27,62 @@ export const transformErrorResponse = (err) => {
 	// Handle other HTTP errors for all response type. Including Object, string, array
 	if (typeof err.status === "number") {
 		if (isErrorResponse(err.data)) {
-			const serverErrorMessage =
-				err.data?.message || err.data?.error || err.data?.detail;
-
-			if (typeof serverErrorMessage === "string") {
-				toast.error(serverErrorMessage);
-			} else if (Array.isArray(serverErrorMessage)) {
-				serverErrorMessage.forEach((msg) => toast.error(msg));
-			} else if (typeof serverErrorMessage === "object") {
-				Object.keys(serverErrorMessage).forEach((field) => {
-					if (Array.isArray(serverErrorMessage[field])) {
-						serverErrorMessage[field].map((msg) => {
+			// Check if message is an object with field-specific errors
+			if (err.data?.message && typeof err.data.message === "object") {
+				Object.keys(err.data.message).forEach((field) => {
+					if (Array.isArray(err.data.message[field])) {
+						err.data.message[field].forEach((msg) => {
 							const friendlyKey = capitalizeWord(
 								field.replaceAll("_", " "),
 							);
-
 							toast.error(`${friendlyKey}: ${msg}`);
 						});
 					} else {
-						toast.error(serverErrorMessage[field]);
+						toast.error(err.data.message[field]);
 					}
 				});
-			} else {
-				toast.error("An unknown error occured. Please try again later.");
+			}
+			// Check if errors object exists with field-specific errors
+			else if (err.data?.errors && typeof err.data.errors === "object") {
+				Object.keys(err.data.errors).forEach((field) => {
+					if (Array.isArray(err.data.errors[field])) {
+						err.data.errors[field].forEach((msg) => {
+							const friendlyKey = capitalizeWord(
+								field.replaceAll("_", " "),
+							);
+							toast.error(`${friendlyKey}: ${msg}`);
+						});
+					} else {
+						toast.error(err.data.errors[field]);
+					}
+				});
+			}
+			// Handle other message formats
+			else {
+				const serverErrorMessage =
+					err.data?.message || err.data?.error || err.data?.detail;
+
+				if (typeof serverErrorMessage === "string") {
+					toast.error(serverErrorMessage);
+				} else if (Array.isArray(serverErrorMessage)) {
+					serverErrorMessage.forEach((msg) => toast.error(msg));
+				} else if (typeof serverErrorMessage === "object") {
+					Object.keys(serverErrorMessage).forEach((field) => {
+						if (Array.isArray(serverErrorMessage[field])) {
+							serverErrorMessage[field].map((msg) => {
+								const friendlyKey = capitalizeWord(
+									field.replaceAll("_", " "),
+								);
+
+								toast.error(`${friendlyKey}: ${msg}`);
+							});
+						} else {
+							toast.error(serverErrorMessage[field]);
+						}
+					});
+				} else {
+					toast.error("An unknown error occured. Please try again later.");
+				}
 			}
 		} else {
 			toast.error(

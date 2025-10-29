@@ -547,25 +547,125 @@ const AllUsers = () => {
 
 	const [isResetAccountModalOpen, setIsResetAccountModalOpen] =
 		useState(false);
+	const [submissionCount, setSubmissionCount] = useState("");
+	const [setCount, setSetCount] = useState("");
+	const [resetAdminPassword, setResetAdminPassword] = useState("");
+	const [submissionCountError, setSubmissionCountError] = useState("");
+	const [setCountError, setSetCountError] = useState("");
 
 	const handleOpenResetAccountModal = () => {
 		setIsResetAccountModalOpen(true);
+		refreshSelectedUser();
+		// Reset form fields
+		setSubmissionCount("");
+		setSetCount("");
+		setResetAdminPassword("");
+		setSubmissionCountError("");
+		setSetCountError("");
 	};
 
 	const handleCloseResetAccountModal = () => {
 		setIsResetAccountModalOpen(false);
+		setSubmissionCount("");
+		setSetCount("");
+		setResetAdminPassword("");
+		setSubmissionCountError("");
+		setSetCountError("");
 	};
+
+	// Pure validation functions that don't update state
+	const validateSubmissionCountPure = (value) => {
+		if (value === "") {
+			return { isValid: true, error: "" };
+		}
+		
+		const numValue = parseInt(value);
+		const dailyMissions = selectedRow?.daily_missions || selectedRow?.wallet?.package?.daily_missions;
+		
+		if (isNaN(numValue) || numValue < 0) {
+			return { isValid: false, error: "Submission count must be a non-negative number" };
+		}
+		
+		if (dailyMissions && numValue > dailyMissions) {
+			return { isValid: false, error: `Cannot exceed package daily missions limit (${dailyMissions})` };
+		}
+		
+		return { isValid: true, error: "" };
+	};
+
+	const validateSetCountPure = (value) => {
+		if (value === "") {
+			return { isValid: true, error: "" };
+		}
+		
+		const numValue = parseInt(value);
+		const numberOfSet = selectedRow?.number_of_set || selectedRow?.wallet?.package?.number_of_set;
+		
+		if (isNaN(numValue) || numValue < 0) {
+			return { isValid: false, error: "Set count must be a non-negative number" };
+		}
+		
+		if (numberOfSet && numValue > numberOfSet) {
+			return { isValid: false, error: `Cannot exceed package number of sets limit (${numberOfSet})` };
+		}
+		
+		return { isValid: true, error: "" };
+	};
+
+	// Validation functions that update state
+	const validateSubmissionCount = (value) => {
+		const result = validateSubmissionCountPure(value);
+		setSubmissionCountError(result.error);
+		return result.isValid;
+	};
+
+	const validateSetCount = (value) => {
+		const result = validateSetCountPure(value);
+		setSetCountError(result.error);
+		return result.isValid;
+	};
+
+	// Check if form is valid using useMemo to prevent infinite re-renders
+	const isFormValid = useMemo(() => {
+		const submissionResult = validateSubmissionCountPure(submissionCount);
+		const setResult = validateSetCountPure(setCount);
+		
+		return resetAdminPassword.trim() !== "" && submissionResult.isValid && setResult.isValid;
+	}, [resetAdminPassword, submissionCount, setCount, selectedRow]);
 
 	const [postResetAccount, { isLoading: loadingResetAccount }] =
 		usePostRequestMutation();
 	const handleSaveResetAccount = async () => {
 		try {
+			// Additional safety check
+			if (!selectedRow?.id) {
+				toast.error("No user selected");
+				return;
+			}
+
 			const userID = selectedRow.id;
+
+			// Validate all fields
+			const isSubmissionValid = validateSubmissionCount(submissionCount);
+			const isSetValid = validateSetCount(setCount);
+
+			if (!isSubmissionValid || !isSetValid) {
+				toast.error("Please fix validation errors before submitting");
+				return;
+			}
 
 			const formValues = {
 				user: userID,
-				admin_password: adminPassword,
+				admin_password: resetAdminPassword,
 			};
+
+			// Add optional fields if provided
+			if (submissionCount !== "") {
+				formValues.submission_count = parseInt(submissionCount);
+			}
+			if (setCount !== "") {
+				formValues.set_count = parseInt(setCount);
+			}
 
 			if (!validateForm(formValues)) return;
 
@@ -578,11 +678,16 @@ const AllUsers = () => {
 			if (res?.data) updateUserLocal(res.data);
 			else await refetchUsers();
 
-			setAdminPassword("");
+			setResetAdminPassword("");
+			setSubmissionCount("");
+			setSetCount("");
+			setSubmissionCountError("");
+			setSetCountError("");
 			invalidateRequestTag(ENDPOINT.GET_ALL_USERS);
 			setIsResetAccountModalOpen(false);
 		} catch (err) {
-			console.error(err);
+			console.error("Reset account error:", err);
+			// Error handling is done by the global transformErrorResponse in request.js
 		}
 	};
 
@@ -2049,12 +2154,110 @@ const AllUsers = () => {
 							value={selectedRow?.username}
 						/>
 
+						{/* Current Package Info */}
+						<div className="bg-gray-50 p-3 rounded-lg">
+							<p className="text-sm font-medium text-gray-700 mb-2">Current Package Limits:</p>
+							<div className="grid grid-cols-2 gap-2 text-sm">
+								<div>
+									<span className="text-gray-600">Daily Missions:</span>
+									<span className="ml-2 font-semibold">
+										{selectedRow?.daily_missions || selectedRow?.wallet?.package?.daily_missions || "N/A"}
+									</span>
+								</div>
+								<div>
+									<span className="text-gray-600">Number of Sets:</span>
+									<span className="ml-2 font-semibold">
+										{selectedRow?.number_of_set || selectedRow?.wallet?.package?.number_of_set || "N/A"}
+									</span>
+								</div>
+							</div>
+						</div>
+
+						{/* Current Values */}
+						<div className="bg-blue-50 p-3 rounded-lg">
+							<p className="text-sm font-medium text-gray-700 mb-2">Current Values:</p>
+							<div className="grid grid-cols-2 gap-2 text-sm">
+								<div>
+									<span className="text-gray-600">Today's Submissions:</span>
+									<span className="ml-2 font-semibold">
+										{selectedRow?.number_of_submission_today || 0}
+									</span>
+								</div>
+								<div>
+									<span className="text-gray-600">Sets Completed:</span>
+									<span className="ml-2 font-semibold">
+										{selectedRow?.number_of_submission_set_today || 0}
+									</span>
+								</div>
+							</div>
+						</div>
+
+						{/* Optional Reset Fields */}
+						<div className="space-y-4">
+							<p className="text-sm font-medium text-gray-700">Optional: Set specific values (leave empty for default reset)</p>
+							
+							<TextField
+								label="Submission Count (Optional - 0 to package daily_missions)"
+								type="number"
+								fullWidth
+								value={submissionCount}
+								onChange={(e) => {
+									setSubmissionCount(e.target.value);
+									validateSubmissionCount(e.target.value);
+								}}
+								onBlur={(e) => validateSubmissionCount(e.target.value)}
+								inputProps={{ 
+									min: 0, 
+									max: selectedRow?.daily_missions || selectedRow?.wallet?.package?.daily_missions || 999 
+								}}
+								error={!!submissionCountError}
+								helperText={submissionCountError || `Max: ${selectedRow?.daily_missions || selectedRow?.wallet?.package?.daily_missions || "N/A"}`}
+								sx={{
+									'& .MuiOutlinedInput-root': {
+										'&.Mui-error': {
+											'& fieldset': {
+												borderColor: '#d32f2f',
+											},
+										},
+									},
+								}}
+							/>
+
+							<TextField
+								label="Set Count (Optional - 0 to package number_of_set)"
+								type="number"
+								fullWidth
+								value={setCount}
+								onChange={(e) => {
+									setSetCount(e.target.value);
+									validateSetCount(e.target.value);
+								}}
+								onBlur={(e) => validateSetCount(e.target.value)}
+								inputProps={{ 
+									min: 0, 
+									max: selectedRow?.number_of_set || selectedRow?.wallet?.package?.number_of_set || 999 
+								}}
+								error={!!setCountError}
+								helperText={setCountError || `Max: ${selectedRow?.number_of_set || selectedRow?.wallet?.package?.number_of_set || "N/A"}`}
+								sx={{
+									'& .MuiOutlinedInput-root': {
+										'&.Mui-error': {
+											'& fieldset': {
+												borderColor: '#d32f2f',
+											},
+										},
+									},
+								}}
+							/>
+						</div>
+
 						<TextField
 							label="Administrateur password"
 							type="password"
 							fullWidth
-							value={adminPassword}
-							onChange={(e) => setAdminPassword(e.target.value)}
+							value={resetAdminPassword}
+							onChange={(e) => setResetAdminPassword(e.target.value)}
+							required
 						/>
 					</div>
 				</DialogContent>
@@ -2071,12 +2274,12 @@ const AllUsers = () => {
 						onClick={handleSaveResetAccount}
 						color="primary"
 						variant="contained"
-						disabled={loadingResetAccount}
+						disabled={loadingResetAccount || !isFormValid}
 					>
 						{loadingResetAccount && (
 							<AiOutlineLoading className="animate-spin " />
 						)}{" "}
-						Save
+						Reset Account
 					</Button>
 				</DialogActions>
 			</Dialog>
